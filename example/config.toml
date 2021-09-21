@@ -1,0 +1,11 @@
+[[Artifact]]
+Name="foo-local: Vaporize"
+AqlPath="example/retention-policies/foo-local.aql"
+
+[[Artifact]]
+Name="bar-local: All but the 5 latest"
+AqlPath="example/retention-policies/bar-local.aql"
+Offset=5
+# Sorting not supported in Artifactory OSS
+# SortBy=["updated"]
+# SortOrder="desc"

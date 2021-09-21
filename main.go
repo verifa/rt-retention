@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/jfrog/jfrog-cli-core/plugins"
-	"github.com/jfrog/jfrog-cli-core/plugins/components"
-	"github.com/jfrog/jfrog-cli-plugin-template/commands"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+	"github.com/praqma-thi/jfrog-cli-retention-plugin/commands"
 )
 
 func main() {
@@ -12,8 +12,8 @@ func main() {
 
 func getApp() components.App {
 	app := components.App{}
-	app.Name = "hello-frog"
-	app.Description = "Easily greet anyone."
+	app.Name = "rt-retention"
+	app.Description = "Enforce retention policies"
 	app.Version = "v0.1.0"
 	app.Commands = getCommands()
 	return app
@@ -21,5 +21,6 @@ func getApp() components.App {
 
 func getCommands() []components.Command {
 	return []components.Command{
-		commands.GetHelloCommand()}
+		commands.GetRunCommand(),
+	}
 }
