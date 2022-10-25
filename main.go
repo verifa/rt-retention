@@ -22,5 +22,6 @@ func getApp() components.App {
 func getCommands() []components.Command {
 	return []components.Command{
 		commands.GetRunCommand(),
+		commands.GetExpandCommand(),
 	}
 }

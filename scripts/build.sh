@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/usr/bin/env bash
 
 echo "[RT-RETENTION] Cleaning..."
 rm -rf build/

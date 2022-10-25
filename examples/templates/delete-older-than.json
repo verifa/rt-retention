@@ -1,0 +1,10 @@
+{
+    "files": [{
+        "aql": {
+            "items.find": {
+                "repo": "{{.Repo}}",
+                "created" : {"$before" : "{{.Time}}"}
+            }
+        }
+    }]
+}

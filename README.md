@@ -1,10 +1,19 @@
 # rt-retention
 
-A JFrog CLI plugin to facilitate retention in Artifactory.
+A JFrog CLI plugin to facilitate artifact retention in Artifactory.
+
+⚠️ **Work in progress** ⚠️
+Don't point this at your production instance
+
+## TL;DR
+
+Deletes artifacts matching all [File Specs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) found in a given directory.
+
+Allows for generation of FileSpecs files through Go templates and a JSON configuration file.
 
 ## Installation
 
-This plugin isn't currently hosted anywhere, so you'll be building it locally.
+This plugin isn't currently hosted anywhere yet, so you'll be building it locally.
 
 You can use the [build.sh](scripts/build.sh) and [install.sh](scripts/install.sh) scripts.
 
@@ -13,45 +22,66 @@ You can use the [build.sh](scripts/build.sh) and [install.sh](scripts/install.sh
 ### Commands
 
 - run
+  - Usage: `jf rt-retention run [command options] <filespecs-path>`
+
   - Arguments:
-    - config-file - Path to the retention configuration file
-  - Flags:
-    - dry-run: Set to true to disable communication with Artifactory **[Default: false]**
-    - verbose: Set to true to output more verbose logging **[Default: false]**
-  - Example: `$ jfrog rt-retention run --dry-run examples/config.toml`
+      - filespecs-path    _(Path to the filespecs file/dir)_
 
-### Environment variables
+  - Options:
+    - --dry-run    _disable communication with Artifactory [Default: **true**]_
+    - --verbose    _output verbose logging [Default: false]_
+    - --recursive    _recursively find filespecs files in the given dir [Default: false]_
 
-N/A
+- expand
+  - Usage: `jf rt-retention expand [command options] <config-path> <templates-path> <output-path>`
+  
+  - Arguments:
+    - config-path    _(Path to the JSON config file)_
+    - templates-path    _(Path to the templates dir)_
+    - output-path    _(Path to output the generated filespecs)_
 
-## Retention configuration
+  - Options:
+    - --verbose      _output verbose logging [Default: false]_
+    - --recursive    _recursively find templates in the given dir [Default: false]_
 
-Retention configuration is kept in a [TOML](https://toml.io/en/) file.
-Currently, only artifact retention is supported.
+## Templating
 
-### Artifact retention
+This plugins allows you to generate retention policies using Go templates and a JSON config file.
 
-Artifact retention uses [AQL](https://www.jfrog.com/confluence/display/JFROG/Artifactory+Query+Language) queries to match files you wish to delete.
+### Templates
 
-Artifact retention configuration consists of the following:
+Templates use values from the JSON config file to generate FileSpec files.
 
-- **Required**:
-  - `AqlPath` (`string`): Path to an AQL query that matches artifacts you wish to delete
-- **Optional**:
-  - `Name` (`string`): Descriptive name for the retention policy
-  - `Offset` (`int`): Amount to offset results by
-  - `SortBy` (`[]string`): Fields to sort results by
-  - `SortOrder` (`string`): Order to sort results by (`"asc"` or `"desc"`)
+`delete-older-than.json`:
+```json
+{
+    "files": [{
+        "aql": {
+            "items.find": {
+                "repo": "{{.Repo}}",
+                "created" : {"$before" : "{{.Time}}"}
+            }
+        }
+    }]
+}
+```
 
-```ini
-[[Artifact]]
-Name="foo-local: Remove all artifacts"
-AqlPath="example/retention-policies/foo-local.aql"
+### JSON config
 
-[[Artifact]]
-Name="bar-local: Keep 5 latest artifacts"
-AqlPath="example/retention-policies/bar-local.aql"
-Offset=5
-SortBy=["updated"]
-SortOrder="desc"
+The JSON config file contains a key for each template, with an array of entries for that template.
+Each entry will result in a FileSpecs file being generated.
+
+If the entry has a **Name** property, it's value will be used as the FileSpecs file name.
+
+`config.json`:
+```json
+{
+    "delete-everything": [
+        { "Name": "foo-dev", "Repo": "foo-dev-local" },
+        { "Name": "bar-dev", "Repo": "bar-dev-local" }
+    ],
+    "delete-older-than": [
+        { "Name": "baz-dev", "Repo": "baz-dev-local", "Time": "30d" }
+    ]
+}
 ```

@@ -2,179 +2,190 @@ package commands
 
 import (
 	"errors"
-	"io/ioutil"
 	"strconv"
 
-	core_commands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
-	core_components "github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	core_config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	core_utils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
-	client_artifactory "github.com/jfrog/jfrog-client-go/artifactory"
-	client_services "github.com/jfrog/jfrog-client-go/artifactory/services"
-	client_serviceutils "github.com/jfrog/jfrog-client-go/artifactory/services/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-client-go/artifactory"
 	client_utils "github.com/jfrog/jfrog-client-go/utils"
-	client_log "github.com/jfrog/jfrog-client-go/utils/log"
-
-	"github.com/praqma-thi/jfrog-cli-retention-plugin/config"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-type runConfiguration struct {
-	configFile string
-	dryRun bool
-	verbose bool
+type RunConfiguration struct {
+	fileSpecsPath string
+	dryRun        bool
+	recursive     bool
+	verbose       bool
 }
 
-func GetRunCommand() core_components.Command {
-	return core_components.Command{
+func GetRunCommand() components.Command {
+	return components.Command{
 		Name:        "run",
 		Description: "Runs retention",
 		Aliases:     []string{},
-		Arguments:   getRunArguments(),
-		Flags:       getRunFlags(),
-		EnvVars:     getRunEnvVar(),
-		Action: func(c *core_components.Context) error {
-			return runCmd(c)
+		Arguments:   GetRunArguments(),
+		Flags:       GetRunFlags(),
+		EnvVars:     GetRunEnvVar(),
+		Action: func(c *components.Context) error {
+			return RunCmd(c)
 		},
 	}
 }
 
-func getRunArguments() []core_components.Argument {
-	return []core_components.Argument{
+func GetRunArguments() []components.Argument {
+	return []components.Argument{
 		{
-			Name:        "config-file",
-			Description: "Path to the retention configuration file",
+			Name:        "filespecs-path",
+			Description: "Path to the filespecs file/dir",
 		},
 	}
 }
 
-func getRunFlags() []core_components.Flag {
-	return []core_components.Flag{
-		core_components.BoolFlag{
+func GetRunFlags() []components.Flag {
+	return []components.Flag{
+		components.BoolFlag{
 			Name:         "dry-run",
-			Description:  "Set to true to disable communication with Artifactory",
-			DefaultValue: false,
+			Description:  "disable deletion of artifacts",
+			DefaultValue: true,
 		},
-		core_components.BoolFlag{
+		components.BoolFlag{
 			Name:         "verbose",
-			Description:  "Set to true to output more verbose logging",
+			Description:  "output verbose logging",
+			DefaultValue: false,
+		},
+		components.BoolFlag{
+			Name:         "recursive",
+			Description:  "recursively find filespecs files in the given dir",
 			DefaultValue: false,
 		},
 	}
 }
 
-func getRunEnvVar() []core_components.EnvVar {
-	return []core_components.EnvVar{
-		{},
-	}
+func GetRunEnvVar() []components.EnvVar {
+	return []components.EnvVar{}
 }
 
-func parseRunConfig(context *core_components.Context) (*runConfiguration, error) {
-	if len(context.Arguments) != 1 {
-		return nil, errors.New("Expected 1 argument, received" + strconv.Itoa(len(context.Arguments)))
+func RunCmd(context *components.Context) error {
+	runConfig, argErr := ParseRunConfig(context)
+	if argErr != nil {
+		return argErr
 	}
 
-	var runConfig = new(runConfiguration)
-	runConfig.configFile = context.Arguments[0]
+	if runConfig.verbose {
+		log.Info("runConfig:")
+		log.Info("    fileSpecsPath:", runConfig.fileSpecsPath)
+		log.Info("    dryRun:", runConfig.dryRun)
+		log.Info("    recursive:", runConfig.recursive)
+		log.Info("    verbose:", runConfig.verbose)
+	}
+
+	log.Info("Fetching Artifactory details")
+	artifactoryDetails, cfgErr := GetArtifactoryDetails(context, runConfig)
+	if cfgErr != nil {
+		return cfgErr
+	}
+
+	log.Info("Configuring Artifactory manager")
+	artifactoryManager, rtfErr := core_utils.CreateServiceManager(artifactoryDetails, 3, 5000, runConfig.dryRun)
+	if rtfErr != nil {
+		return rtfErr
+	}
+
+	log.Info("Collecting retention files")
+	fileSpecsFiles, findErr := FindFiles(runConfig.fileSpecsPath, ".json", runConfig.recursive)
+	if findErr != nil {
+		return findErr
+	}
+
+	if len(fileSpecsFiles) == 0 {
+		log.Warn("Found no JSON files")
+	} else {
+		log.Info("Found", len(fileSpecsFiles), "JSON files")
+	}
+
+	if runConfig.verbose {
+		for _, file := range fileSpecsFiles {
+			log.Info("    " + file)
+		}
+	}
+
+	if retentionErr := RunArtifactRetention(artifactoryManager, fileSpecsFiles); retentionErr != nil {
+		return retentionErr
+	}
+
+	log.Info("Done")
+	return nil
+}
+
+func ParseRunConfig(context *components.Context) (*RunConfiguration, error) {
+	if len(context.Arguments) != 1 {
+		return nil, errors.New("Expected 1 argument, received " + strconv.Itoa(len(context.Arguments)))
+	}
+
+	var runConfig = new(RunConfiguration)
+	runConfig.fileSpecsPath = context.Arguments[0]
 	runConfig.dryRun = context.GetBoolFlagValue("dry-run")
+	runConfig.recursive = context.GetBoolFlagValue("recursive")
 	runConfig.verbose = context.GetBoolFlagValue("verbose")
 
 	return runConfig, nil
 }
 
-func runCmd(context *core_components.Context) error {
-	runConfig, err := parseRunConfig(context)
-	if err != nil {
-		return err
-	}
-
-	if (runConfig.verbose) {
-		client_log.Info("runConfig:")
-		client_log.Info("    configFile:", runConfig.configFile)
-		client_log.Info("    dryRun:", runConfig.dryRun)
-		client_log.Info("    verbose:", runConfig.verbose)
-	}
-
-	client_log.Info("Fetching Artifactory details")
-	artifactoryDetails, err := getArtifactoryDetails(context)
-	if err != nil {
-		return err
-	}
-
-	client_log.Info("Configuring Artifactory manager")
-	artifactoryManager, err := core_utils.CreateServiceManager(artifactoryDetails, -1, runConfig.dryRun)
-	if err != nil {
-		return err
-	}
-
-	client_log.Info("Parsing retention configuration")
-	retentionConfiguration := config.ParseRetentionConfiguration(runConfig.configFile)
-
-	if (runConfig.verbose) {
-		client_log.Info("retentionConfiguration:")
-		client_log.Info("    Artifact:", len(retentionConfiguration.Artifact))
-		for _, artifactRetention := range retentionConfiguration.Artifact {
-			client_log.Info("        - ", artifactRetention.Name)
-			client_log.Info("            - Limit", artifactRetention.Limit)
-			client_log.Info("            - Offset", artifactRetention.Offset)
-			client_log.Info("            - SortBy", artifactRetention.SortBy)
-			client_log.Info("            - SortOrder", artifactRetention.SortOrder)
+func GetArtifactoryDetails(context *components.Context, runConfig *RunConfiguration) (*config.ServerDetails, error) {
+	if runConfig.verbose {
+		var servers = commands.GetAllServerIds()
+		log.Info("Server IDs: ", len(servers))
+		for _, server := range servers {
+			log.Info("\t", server)
 		}
 	}
 
-	client_log.Info("Executing",  len(retentionConfiguration.Artifact), "artifact retention policies")
-	if err = runArtifactRetention(artifactoryManager, retentionConfiguration.Artifact); err != nil {
-		return err
+	details, cfgErr := config.GetDefaultServerConf()
+	if cfgErr != nil {
+		return nil, cfgErr
 	}
 
-	client_log.Info("Done")
-	return nil
-}
-
-func runArtifactRetention(artifactoryManager client_artifactory.ArtifactoryServicesManager, artifactRetentions []config.Artifact) error {
-	for i, artifactRetention := range artifactRetentions {
-		client_log.Info(i + 1, "/", len(artifactRetentions), ":", artifactRetention.Name)
-		aqlQuery, err := ioutil.ReadFile(artifactRetention.AqlPath)
-		if err != nil {
-			return err
-		}
-
-		params := client_services.NewDeleteParams()
-		params.Offset = artifactRetention.Offset
-		params.Limit = artifactRetention.Limit
-		params.SortOrder = artifactRetention.SortOrder
-		params.SortBy = artifactRetention.SortBy
-		params.Aql = client_serviceutils.Aql{
-			ItemsFind: string(aqlQuery),
-		}
-		params.Recursive = true
-
-		pathsToDelete, err := artifactoryManager.GetPathsToDelete(params)
-		if err != nil {
-			return err
-		}
-		defer pathsToDelete.Close()
-
-		artifactoryManager.DeleteFiles(pathsToDelete)
+	if runConfig.verbose {
+		log.Info("Default server ID:")
+		log.Info("\t", details.ServerId, "(", details.ArtifactoryUrl, ")")
 	}
 
-	return nil
-}
-
-func getArtifactoryDetails(c *core_components.Context) (*core_config.ServerDetails, error) {
-	details, err := core_commands.GetConfig("", false)
-	if err != nil {
-		return nil, err
-	}
-
-	if details.Url == "" {
+	if details.ArtifactoryUrl == "" {
 		return nil, errors.New("no server-id was found, or the server-id has no url")
 	}
 
-	details.Url = client_utils.AddTrailingSlashIfNeeded(details.Url)
-	err = core_config.CreateInitialRefreshableTokensIfNeeded(details)
-	if err != nil {
-		return nil, err
+	details.ArtifactoryUrl = client_utils.AddTrailingSlashIfNeeded(details.ArtifactoryUrl)
+	if tokenErr := config.CreateInitialRefreshableTokensIfNeeded(details); tokenErr != nil {
+		return nil, tokenErr
 	}
 
 	return details, nil
+}
+
+func RunArtifactRetention(artifactoryManager artifactory.ArtifactoryServicesManager, fileSpecsFiles []string) error {
+	totalFiles := len(fileSpecsFiles)
+	for i, file := range fileSpecsFiles {
+		log.Info(i+1, "/", totalFiles, ":", file)
+
+		deleteParams, parseErr := ParseDeleteParams(file)
+		if parseErr != nil {
+			return parseErr
+		}
+
+		for _, dp := range deleteParams {
+			pathsToDelete, pathsErr := artifactoryManager.GetPathsToDelete(dp)
+			if pathsErr != nil {
+				return pathsErr
+			}
+			defer pathsToDelete.Close()
+
+			if _, delErr := artifactoryManager.DeleteFiles(pathsToDelete); delErr != nil {
+				return delErr
+			}
+		}
+	}
+
+	return nil
 }

@@ -1,0 +1,7 @@
+{
+    "files": [
+        {
+            "pattern": "generic-local/*.rpm"
+        }
+    ]
+}
