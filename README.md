@@ -2,9 +2,6 @@
 
 A JFrog CLI plugin to facilitate artifact retention in Artifactory.
 
-⚠️ **Work in progress** ⚠️
-Don't point this at your production instance
-
 ## TL;DR
 
 Deletes artifacts matching all [File Specs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) found in a given directory.
