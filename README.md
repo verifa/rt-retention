@@ -52,14 +52,18 @@ Templates use values from the JSON config file to generate FileSpec files.
 `delete-older-than.json`:
 ```json
 {
-    "files": [{
-        "aql": {
-            "items.find": {
-                "repo": "{{.Repo}}",
-                "created" : {"$before" : "{{.Time}}"}
+    "files": [
+        {
+            "aql": {
+                "items.find": {
+                    "repo": "{{.Repo}}",
+                    "created": {
+                        "$before": "{{.Time}}"
+                    }
+                }
             }
         }
-    }]
+    ]
 }
 ```
 
@@ -74,11 +78,19 @@ If the entry has a **Name** property, it's value will be used as the FileSpecs f
 ```json
 {
     "delete-everything": [
-        { "Name": "foo-dev", "Repo": "foo-dev-local" },
-        { "Name": "bar-dev", "Repo": "bar-dev-local" }
+        {
+            "Repo": "generic-tmp-local"
+        }
     ],
     "delete-older-than": [
-        { "Name": "baz-dev", "Repo": "baz-dev-local", "Time": "30d" }
+        {
+            "Repo": "generic-dev-local",
+            "Time": "14d"
+        },
+        {
+            "Repo": "generic-rc-local",
+            "Time": "1y"
+        }
     ]
 }
 ```

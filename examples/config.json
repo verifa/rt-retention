@@ -1,9 +1,17 @@
 {
     "delete-everything": [
-        { "Name": "foo-dev", "Repo": "foo-dev-local" },
-        { "Name": "bar-dev", "Repo": "bar-dev-local" }
+        {
+            "Repo": "generic-tmp-local"
+        }
     ],
     "delete-older-than": [
-        { "Name": "baz-dev", "Repo": "baz-dev-local", "Time": "30d" }
+        {
+            "Repo": "generic-dev-local",
+            "Time": "14d"
+        },
+        {
+            "Repo": "generic-rc-local",
+            "Time": "1y"
+        }
     ]
 }
