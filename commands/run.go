@@ -165,27 +165,45 @@ func GetArtifactoryDetails(context *components.Context, runConfig *RunConfigurat
 }
 
 func RunArtifactRetention(artifactoryManager artifactory.ArtifactoryServicesManager, fileSpecsFiles []string) error {
+	runErrors := []string{}
 	totalFiles := len(fileSpecsFiles)
 	for i, file := range fileSpecsFiles {
 		log.Info(i+1, "/", totalFiles, ":", file)
 
 		deleteParams, parseErr := ParseDeleteParams(file)
 		if parseErr != nil {
-			return parseErr
+			var err = "ParseDeleteParams failed for file: " + file + "\n" + parseErr.Error()
+			runErrors = append(runErrors, err)
+			log.Error(err)
+			continue
 		}
 
 		for _, dp := range deleteParams {
 			pathsToDelete, pathsErr := artifactoryManager.GetPathsToDelete(dp)
 			if pathsErr != nil {
-				return pathsErr
+				var err = "GetPathsToDelete failed for file: " + file + "\n" + pathsErr.Error()
+				runErrors = append(runErrors, err)
+				log.Error(err)
+				continue
 			}
 			defer pathsToDelete.Close()
 
 			if _, delErr := artifactoryManager.DeleteFiles(pathsToDelete); delErr != nil {
-				return delErr
+				var err = "DeleteFiles failed for file: " + file + "\n" + delErr.Error()
+				runErrors = append(runErrors, err)
+				log.Error(err)
+				continue
 			}
 		}
 	}
 
-	return nil
+	if len(runErrors) == 0 {
+		return nil
+	} else {
+		summary := "The following errors occured during the run:\n"
+		for _, err := range runErrors {
+			summary += err + "\n"
+		}
+		return errors.New(summary)
+	}
 }

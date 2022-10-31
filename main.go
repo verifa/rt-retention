@@ -14,7 +14,7 @@ func getApp() components.App {
 	app := components.App{}
 	app.Name = "rt-retention"
 	app.Description = "Enforce retention policies"
-	app.Version = "v0.1.0"
+	app.Version = "v0.1.1"
 	app.Commands = getCommands()
 	return app
 }
