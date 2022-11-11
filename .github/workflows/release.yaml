@@ -38,6 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
   release-mkdocs:
+    needs: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
