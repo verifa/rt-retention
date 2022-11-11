@@ -21,3 +21,6 @@ jfrog-cli-retention-plugin
 *.DS_Store
 
 dist/
+
+# Mkdocs
+site/

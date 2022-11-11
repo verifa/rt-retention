@@ -1,20 +1,10 @@
 # rt-retention
 
-A JFrog CLI plugin to facilitate artifact retention in Artifactory.
+A simple JFrog CLI plugin to facilitate enforcing retention policies in Artifactory.
 
-## TL;DR
+The plugin allows you to delete artifacts using [FileSpecs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) found in a given directory.
 
-Deletes artifacts matching all [File Specs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) found in a given directory.
-
-Allows for generation of FileSpecs files through Go templates and a JSON configuration file.
-
-## Installation
-
-This plugin isn't currently hosted anywhere yet, so you'll be building it locally.
-
-You can use the [build.sh](scripts/build.sh) and [install.sh](scripts/install.sh) scripts.
-
-## Usage
+It also allows for generation of FileSpecs through Go templates and a JSON configuration file.
 
 ### Commands
 
