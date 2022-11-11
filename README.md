@@ -1,31 +1,56 @@
 # rt-retention
 
-A simple JFrog CLI plugin to facilitate enforcing retention policies in Artifactory.
+`rt-retention` is a simple JFrog CLI plugin to facilitate enforcing retention policies in Artifactory.
 
-The plugin allows you to delete artifacts using [FileSpecs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) found in a given directory.
+## How it works
 
-It also allows for generation of FileSpecs through Go templates and a JSON configuration file.
+`rt-retention` deletes artifacts matching [FileSpecs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) in a given directory.
+It also has templating capabilities to help maintain similar retention policies.
 
-### Commands
+To set up your retention policies, define them as [FileSpecs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) (or templates thereof).
+To enforce them, set up a humble cron job running the plugin.
+That's all there is to it.
 
-- run
+## Installing rt-retention
+
+### docker
+
+- `docker pull verifa/rt-retention`
+
+### brew
+
+- `brew install verifa/tap/rt-retention`
+
+### manual
+
+- Download the latest version from the [Releases](https://github.com/verifa/rt-retention/releases) page
+- Place its contents in your `~/.jfrog/plugins` directory
+  (If there’s no `plugins` directory under `.jfrog`, create it)
+
+## Running rt-retention
+
+### commands
+
+#### run
+
   - Usage: `jf rt-retention run [command options] <filespecs-path>`
 
   - Arguments:
-      - filespecs-path    _(Path to the filespecs file/dir)_
+      - filespecs-path    _(Path to the FileSpecs file/dir)_
 
   - Options:
-    - --dry-run    _disable communication with Artifactory [Default: **true**]_
+    - --dry-run    _do not delete artifacts [Default: **true**]_
     - --verbose    _output verbose logging [Default: false]_
-    - --recursive    _recursively find filespecs files in the given dir [Default: false]_
+    - --recursive    _recursively find FileSpecs files in the given dir [Default: false]_
 
-- expand
+#### expand
+
   - Usage: `jf rt-retention expand [command options] <config-path> <templates-path> <output-path>`
   
   - Arguments:
     - config-path    _(Path to the JSON config file)_
     - templates-path    _(Path to the templates dir)_
-    - output-path    _(Path to output the generated filespecs)_
+    - output-path    _(Path to output the generated FileSpecs)_
 
   - Options:
     - --verbose      _output verbose logging [Default: false]_
@@ -33,54 +58,62 @@ It also allows for generation of FileSpecs through Go templates and a JSON confi
 
 ## Templating
 
-This plugins allows you to generate retention policies using Go templates and a JSON config file.
+The [`expand`](#expand) command can generate FileSpecs from Go templates, populated with values from a JSON config file.
 
-### Templates
+The JSON config file contains a key for each template with an array of entries.
+The keys should match the template file names (without the `.json` extension). 
+Each entry will result in a FileSpecs file being generated.
 
-Templates use values from the JSON config file to generate FileSpec files.
-
-`delete-older-than.json`:
+_Example `config.json`:_
 ```json
 {
-    "files": [
-        {
-            "aql": {
-                "items.find": {
-                    "repo": "{{.Repo}}",
-                    "created": {
-                        "$before": "{{.Time}}"
-                    }
-                }
-            }
-        }
-    ]
+  "delete-everything": [
+    {
+      "Repo": "generic-tmp-local"
+    }
+  ],
+  "delete-older-than": [
+    {
+      "Repo": "generic-dev-local",
+      "Time": "14d"
+    },
+    {
+      "Repo": "generic-rc-local",
+      "Time": "1y"
+    }
+  ]
 }
 ```
 
-### JSON config
+The templates themselves are [Go text templates](https://pkg.go.dev/text/template).
+Properties from the JSON config entry will be used to populate the template.
 
-The JSON config file contains a key for each template, with an array of entries for that template.
-Each entry will result in a FileSpecs file being generated.
-
-If the entry has a **Name** property, it's value will be used as the FileSpecs file name.
-
-`config.json`:
+_Example `templates/delete-older-than.json`:_
 ```json
 {
-    "delete-everything": [
-        {
-            "Repo": "generic-tmp-local"
+  "files": [
+    {
+      "aql": {
+        "items.find": {
+          "repo": "{{.Repo}}",
+          "created": {
+            "$before": "{{.Time}}"
+          }
         }
-    ],
-    "delete-older-than": [
-        {
-            "Repo": "generic-dev-local",
-            "Time": "14d"
-        },
-        {
-            "Repo": "generic-rc-local",
-            "Time": "1y"
-        }
-    ]
+      }
+    }
+  ]
 }
+```
+
+Pass the config file, the templates directory and the output directory to the [`expand`](#expand) command to generate the retention policies.
+
+```bash
+$ jf rt-retention expand config.json templates/ policies/
+[🔵Info] Collecting template files
+[🔵Info] Found 2 JSON files
+[🔵Info] Parsing config file
+[🔵Info] Expanding delete-everything
+[🔵Info] Expanding delete-older-than
+[🔵Info] Done
 ```

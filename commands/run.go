@@ -47,7 +47,7 @@ func GetRunFlags() []components.Flag {
 	return []components.Flag{
 		components.BoolFlag{
 			Name:         "dry-run",
-			Description:  "disable deletion of artifacts",
+			Description:  "do not delete artifacts",
 			DefaultValue: true,
 		},
 		components.BoolFlag{
