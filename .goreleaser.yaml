@@ -27,13 +27,13 @@ changelog:
       - "^test:"
 
 brews:
-  - name: artifactory-retention
+  - name: rt-retention
     tap:
       owner: verifa
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     folder: Formula
-    homepage: "https://github.com/verifa/artifactory-retention"
+    homepage: "https://github.com/verifa/rt-retention"
     description: "Artifactory Retention"
     test: |
       system "#{bin}/rt-retention -v"
@@ -56,7 +56,7 @@ dockers:
 release:
   github:
     owner: verifa
-    name: artifactory-retention
+    name: rt-retention
   prerelease: auto
   disable: false
   draft: false

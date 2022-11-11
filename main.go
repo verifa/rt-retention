@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/verifa/artifactory-retention/commands"
+	"github.com/verifa/rt-retention/commands"
 )
 
 var version = "dev"

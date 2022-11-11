@@ -1,4 +1,4 @@
-module github.com/verifa/artifactory-retention
+module github.com/verifa/rt-retention
 
 go 1.18
 
