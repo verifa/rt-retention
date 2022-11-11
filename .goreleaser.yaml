@@ -31,7 +31,7 @@ brews:
     tap:
       owner: verifa
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      token: "{{ .Env.GITHUB_TOKEN }}"
     folder: Formula
     homepage: "https://github.com/verifa/rt-retention"
     description: "Artifactory Retention"
