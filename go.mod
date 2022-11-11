@@ -1,4 +1,4 @@
-module github.com/praqma-thi/jfrog-cli-retention-plugin
+module github.com/verifa/artifactory-retention
 
 go 1.18
 

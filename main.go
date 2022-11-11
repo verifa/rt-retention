@@ -3,8 +3,10 @@ package main
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/praqma-thi/jfrog-cli-retention-plugin/commands"
+	"github.com/verifa/artifactory-retention/commands"
 )
+
+var version = "dev"
 
 func main() {
 	plugins.PluginMain(getApp())
@@ -14,7 +16,7 @@ func getApp() components.App {
 	app := components.App{}
 	app.Name = "rt-retention"
 	app.Description = "Enforce retention policies"
-	app.Version = "v0.1.1"
+	app.Version = version
 	app.Commands = getCommands()
 	return app
 }

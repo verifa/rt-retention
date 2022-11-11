@@ -19,3 +19,5 @@ jfrog-cli-retention-plugin
 
 # IOS
 *.DS_Store
+
+dist/
