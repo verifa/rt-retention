@@ -17,10 +17,6 @@ That's all there is to it.
 
 - `docker pull verifa/rt-retention`
 
-### brew
-
-- `brew install verifa/tap/rt-retention`
-
 ### manual
 
 - Download the latest version from the [Releases](https://github.com/verifa/rt-retention/releases) page

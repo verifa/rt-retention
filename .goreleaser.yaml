@@ -26,18 +26,6 @@ changelog:
       - "^docs:"
       - "^test:"
 
-brews:
-  - name: rt-retention
-    tap:
-      owner: verifa
-      name: homebrew-tap
-      token: "{{ .Env.GITHUB_TOKEN }}"
-    folder: Formula
-    homepage: "https://github.com/verifa/rt-retention"
-    description: "Artifactory Retention"
-    test: |
-      system "#{bin}/rt-retention -v"
-
 dockers:
   - goos: linux
     goarch: amd64
