@@ -9,7 +9,6 @@ It also has templating capabilities to help maintain similar retention policies.
 
 To set up your retention policies, define them as [FileSpecs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) (or templates thereof).
 To enforce them, set up a humble cron job running the plugin.
-That's all there is to it.
 
 ## Installing rt-retention
 
