@@ -46,15 +46,19 @@ func FindFiles(root string, suffix string, recursive bool) ([]string, error) {
 	}
 }
 
-func ParseDeleteParams(path string) ([]services.DeleteParams, error) {
-	reader, fileErr := os.Open(path)
+func ParseDeleteParamsFromPath(path string) ([]services.DeleteParams, error) {
+	file, fileErr := os.Open(path)
 	if fileErr != nil {
 		return nil, fileErr
 	}
 
+	return ParseDeleteParamsFromFile(file)
+}
+
+func ParseDeleteParamsFromFile(file *os.File) ([]services.DeleteParams, error) {
 	var specFiles spec.SpecFiles
-	decodeErr := json.NewDecoder(reader).Decode(&specFiles)
-	if fileErr != nil {
+	decodeErr := json.NewDecoder(file).Decode(&specFiles)
+	if decodeErr != nil {
 		return nil, decodeErr
 	}
 

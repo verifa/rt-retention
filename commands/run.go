@@ -4,12 +4,8 @@ import (
 	"errors"
 	"strconv"
 
-	core_utils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
-	"github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-client-go/artifactory"
-	client_utils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
@@ -81,37 +77,31 @@ func RunCmd(context *components.Context) error {
 		log.Info("    verbose:", runConfig.verbose)
 	}
 
-	log.Info("Fetching Artifactory details")
-	artifactoryDetails, cfgErr := GetArtifactoryDetails(context, runConfig)
-	if cfgErr != nil {
-		return cfgErr
-	}
-
 	log.Info("Configuring Artifactory manager")
-	artifactoryManager, rtfErr := core_utils.CreateServiceManager(artifactoryDetails, 3, 5000, runConfig.dryRun)
+	artifactoryManager, rtfErr := GetArtifactoryManager(context, runConfig.dryRun, runConfig.verbose)
 	if rtfErr != nil {
 		return rtfErr
 	}
 
 	log.Info("Collecting retention files")
-	fileSpecsFiles, findErr := FindFiles(runConfig.fileSpecsPath, ".json", runConfig.recursive)
+	fileSpecsPaths, findErr := FindFiles(runConfig.fileSpecsPath, ".json", runConfig.recursive)
 	if findErr != nil {
 		return findErr
 	}
 
-	if len(fileSpecsFiles) == 0 {
+	if len(fileSpecsPaths) == 0 {
 		log.Warn("Found no JSON files")
 	} else {
-		log.Info("Found", len(fileSpecsFiles), "JSON files")
+		log.Info("Found", len(fileSpecsPaths), "JSON files")
 	}
 
 	if runConfig.verbose {
-		for _, file := range fileSpecsFiles {
+		for _, file := range fileSpecsPaths {
 			log.Info("    " + file)
 		}
 	}
 
-	if retentionErr := RunArtifactRetention(artifactoryManager, fileSpecsFiles); retentionErr != nil {
+	if retentionErr := RunArtifactRetention(artifactoryManager, fileSpecsPaths); retentionErr != nil {
 		return retentionErr
 	}
 
@@ -133,46 +123,15 @@ func ParseRunConfig(context *components.Context) (*RunConfiguration, error) {
 	return runConfig, nil
 }
 
-func GetArtifactoryDetails(context *components.Context, runConfig *RunConfiguration) (*config.ServerDetails, error) {
-	if runConfig.verbose {
-		var servers = commands.GetAllServerIds()
-		log.Info("Server IDs: ", len(servers))
-		for _, server := range servers {
-			log.Info("\t", server)
-		}
-	}
-
-	details, cfgErr := config.GetDefaultServerConf()
-	if cfgErr != nil {
-		return nil, cfgErr
-	}
-
-	if runConfig.verbose {
-		log.Info("Default server ID:")
-		log.Info("\t", details.ServerId, "(", details.ArtifactoryUrl, ")")
-	}
-
-	if details.ArtifactoryUrl == "" {
-		return nil, errors.New("no server-id was found, or the server-id has no url")
-	}
-
-	details.ArtifactoryUrl = client_utils.AddTrailingSlashIfNeeded(details.ArtifactoryUrl)
-	if tokenErr := config.CreateInitialRefreshableTokensIfNeeded(details); tokenErr != nil {
-		return nil, tokenErr
-	}
-
-	return details, nil
-}
-
-func RunArtifactRetention(artifactoryManager artifactory.ArtifactoryServicesManager, fileSpecsFiles []string) error {
+func RunArtifactRetention(artifactoryManager artifactory.ArtifactoryServicesManager, fileSpecsPaths []string) error {
 	runErrors := []string{}
-	totalFiles := len(fileSpecsFiles)
-	for i, file := range fileSpecsFiles {
-		log.Info(i+1, "/", totalFiles, ":", file)
+	totalPaths := len(fileSpecsPaths)
+	for i, path := range fileSpecsPaths {
+		log.Info(i+1, "/", totalPaths, ":", path)
 
-		deleteParams, parseErr := ParseDeleteParams(file)
+		deleteParams, parseErr := ParseDeleteParamsFromPath(path)
 		if parseErr != nil {
-			var err = "ParseDeleteParams failed for file: " + file + "\n" + parseErr.Error()
+			var err = "ParseDeleteParamsFromPath failed for path: " + path + "\n" + parseErr.Error()
 			runErrors = append(runErrors, err)
 			log.Error(err)
 			continue
@@ -181,7 +140,7 @@ func RunArtifactRetention(artifactoryManager artifactory.ArtifactoryServicesMana
 		for _, dp := range deleteParams {
 			pathsToDelete, pathsErr := artifactoryManager.GetPathsToDelete(dp)
 			if pathsErr != nil {
-				var err = "GetPathsToDelete failed for file: " + file + "\n" + pathsErr.Error()
+				var err = "GetPathsToDelete failed for path: " + path + "\n" + pathsErr.Error()
 				runErrors = append(runErrors, err)
 				log.Error(err)
 				continue
@@ -189,7 +148,7 @@ func RunArtifactRetention(artifactoryManager artifactory.ArtifactoryServicesMana
 			defer pathsToDelete.Close()
 
 			if _, delErr := artifactoryManager.DeleteFiles(pathsToDelete); delErr != nil {
-				var err = "DeleteFiles failed for file: " + file + "\n" + delErr.Error()
+				var err = "DeleteFiles failed for path: " + path + "\n" + delErr.Error()
 				runErrors = append(runErrors, err)
 				log.Error(err)
 				continue
