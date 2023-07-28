@@ -1,17 +1,17 @@
 {
-    "delete-everything": [
-        {
-            "Repo": "generic-tmp-local"
-        }
-    ],
-    "delete-older-than": [
-        {
-            "Repo": "generic-dev-local",
-            "Time": "14d"
-        },
-        {
-            "Repo": "generic-rc-local",
-            "Time": "1y"
-        }
-    ]
+    "my-junk-repositories": {
+        "template": "templates/entire-repo.json",
+        "nameProperty": "Repo",
+        "entries": [
+            { "Repo": "scratch-local" }
+        ]
+    },
+    "my-dev-repositories": {
+        "template": "templates/older-than.json",
+        "nameProperty": "Repo",
+        "entries": [
+            { "Repo": "generic-dev-local", "Time": "3w" },
+            { "Repo": "libs-snapshot-local", "Time": "1y" }
+        ]
+    }
 }
