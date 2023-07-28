@@ -44,39 +44,40 @@ To enforce them, set up a humble cron job running the plugin.
   
   - Arguments:
     - config-path    _(Path to the JSON config file)_
-    - templates-path    _(Path to the templates dir)_
     - output-path    _(Path to output the generated FileSpecs)_
 
   - Options:
     - --verbose      _output verbose logging [Default: false]_
-    - --recursive    _recursively find templates in the given dir [Default: false]_
 
 ## Templating
 
 The [`expand`](#expand) command can generate FileSpecs from Go templates, populated with values from a JSON config file.
 
-The JSON config file contains a key for each template with an array of entries.
-The keys should match the template file names (without the `.json` extension). 
+The JSON config file may contain one or more policy definitions.
+Each specifies the template file it uses, as well as a list of entries.
+The template file path should be relative to the config file.
 Each entry will result in a FileSpecs file being generated.
+
+Policies can optionally set a `nameProperty`, which can be used to change the generated FileSpecs' file name to the value of the given property key.
 
 _Example `config.json`:_
 ```json
 {
-  "delete-everything": [
-    {
-      "Repo": "generic-tmp-local"
-    }
-  ],
-  "delete-older-than": [
-    {
-      "Repo": "generic-dev-local",
-      "Time": "14d"
+    "my-junk-repositories": {
+        "template": "templates/entire-repo.json",
+        "nameProperty": "Repo",
+        "entries": [
+            { "Repo": "scratch-local" }
+        ]
     },
-    {
-      "Repo": "generic-rc-local",
-      "Time": "1y"
+    "my-dev-repositories": {
+        "template": "templates/older-than.json",
+        "nameProperty": "Repo",
+        "entries": [
+            { "Repo": "generic-dev-local", "Time": "3w" },
+            { "Repo": "libs-snapshot-local", "Time": "1y" }
+        ]
     }
-  ]
 }
 ```
 
@@ -105,10 +106,10 @@ Pass the config file, the templates directory and the output directory to the [`
 
 ```bash
 $ jf rt-retention expand config.json templates/ policies/
-[🔵Info] Collecting template files
-[🔵Info] Found 2 JSON files
-[🔵Info] Parsing config file
-[🔵Info] Expanding delete-everything
-[🔵Info] Expanding delete-older-than
+[🔵Info] Reading config file
+[🔵Info] Parsing config JSON
+[🔵Info] Expanding policies
+[🔵Info]   [ my-junk-repositories ]
+[🔵Info]   [ my-dev-repositories ]
 [🔵Info] Done
 ```
