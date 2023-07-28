@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"text/template"
 
@@ -14,11 +15,16 @@ import (
 )
 
 type ExpandConfiguration struct {
-	configPath    string
-	templatesPath string
-	outputPath    string
-	recursive     bool
-	verbose       bool
+	configFile string
+	outputPath string
+	verbose    bool
+}
+
+type Policy struct {
+	Template     string                   `json:"template"`
+	DeleteParent bool                     `json:"deleteParent"`
+	NameProperty string                   `json:"nameProperty"`
+	Entries      []map[string]interface{} `json:"entries"`
 }
 
 func GetExpandCommand() components.Command {
@@ -38,12 +44,8 @@ func GetExpandCommand() components.Command {
 func GetExpandArguments() []components.Argument {
 	return []components.Argument{
 		{
-			Name:        "config-path",
+			Name:        "config-file",
 			Description: "Path to the JSON config file",
-		},
-		{
-			Name:        "templates-path",
-			Description: "Path to the templates dir",
 		},
 		{
 			Name:        "output-path",
@@ -57,11 +59,6 @@ func GetExpandFlags() []components.Flag {
 		components.BoolFlag{
 			Name:         "verbose",
 			Description:  "output verbose logging",
-			DefaultValue: false,
-		},
-		components.BoolFlag{
-			Name:         "recursive",
-			Description:  "recursively find templates in the given dir",
 			DefaultValue: false,
 		},
 	}
@@ -79,78 +76,81 @@ func ExpandCmd(context *components.Context) error {
 
 	if expandConfig.verbose {
 		log.Info("expandConfig:")
-		log.Info("    configPath:", expandConfig.configPath)
-		log.Info("    templatesPath:", expandConfig.templatesPath)
+		log.Info("    configFile:", expandConfig.configFile)
 		log.Info("    outputPath:", expandConfig.outputPath)
-		log.Info("    recursive:", expandConfig.recursive)
 		log.Info("    verbose:", expandConfig.verbose)
 	}
 
-	log.Info("Collecting template files")
-	templateFiles, findErr := FindFiles(expandConfig.templatesPath, ".json", expandConfig.recursive)
-	if findErr != nil {
-		return findErr
-	}
-
-	if len(templateFiles) == 0 {
-		log.Warn("Found no JSON files")
-	} else {
-		log.Info("Found", len(templateFiles), "JSON files")
-	}
-
-	if expandConfig.verbose {
-		for _, file := range templateFiles {
-			log.Info("    " + file)
-		}
-	}
-
-	log.Info("Parsing config file")
-	configFile, readErr := os.ReadFile(expandConfig.configPath)
+	log.Info("Reading config file")
+	configFile, readErr := os.ReadFile(expandConfig.configFile)
 	if readErr != nil {
 		return readErr
 	}
 
-	var config map[string][]map[string]interface{}
+	log.Info("Parsing config JSON")
+	var config map[string]Policy
 	if jsonErr := json.Unmarshal(configFile, &config); jsonErr != nil {
 		return jsonErr
 	}
 
-	for templateName, entries := range config {
-		log.Info("Expanding", templateName)
+	log.Info("Expanding policies")
+	for policyName, policy := range config {
+		log.Info("  [", policyName, "]")
 
-		templateText, readErr := os.ReadFile(path.Join(expandConfig.templatesPath, templateName+".json"))
+		if expandConfig.verbose {
+			log.Info("    template:", policy.Template)
+			log.Info("    nameProperty:", policy.NameProperty)
+			log.Info("    entries:", len(policy.Entries))
+		}
+
+		// Find the policy's template
+		templatePath := path.Join(filepath.Dir(expandConfig.configFile), policy.Template)
+		if expandConfig.verbose {
+			log.Info("    template:", templatePath)
+		}
+
+		// Read the policy's template
+		templateBytes, readErr := os.ReadFile(templatePath)
 		if readErr != nil {
 			return readErr
 		}
 
-		template, parseErr := template.New(templateName).Option("missingkey=error").Parse(string(templateText))
+		// Prep template for parsing
+		template, parseErr := template.New(policyName).Option("missingkey=error").Parse(string(templateBytes))
 		if parseErr != nil {
 			return parseErr
 		}
 
-		if dirErr := os.MkdirAll(path.Join(expandConfig.outputPath, templateName), 0755); dirErr != nil {
+		// Create output dir if necessary
+		if dirErr := os.MkdirAll(path.Join(expandConfig.outputPath, policyName), 0755); dirErr != nil {
 			return dirErr
 		}
 
-		for index, entry := range entries {
-			var fileName string
-			if name, hasName := entry["Name"]; hasName {
-				fileName = fmt.Sprint(name, ".json")
-			} else {
-				fileName = fmt.Sprint(templateName, "-", index, ".json")
+		// Iterate over policy entries
+		for index, entry := range policy.Entries {
+			// Figure out the file name for the result file
+			fileName := fmt.Sprint(policyName, "-", index, ".json")
+
+			// If the policy has a NameProperty, use that for the filename
+			if policy.NameProperty != "" {
+				if entry[policy.NameProperty] != "" {
+					fileName = fmt.Sprint(entry[policy.NameProperty], "-", index, ".json")
+				}
 			}
 
-			resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, templateName, fileName))
+			// Create the result file
+			resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, policyName, fileName))
 			if fileErr != nil {
 				return fileErr
 			}
 
+			// Expand the template, dumping it into the result file
 			if templatingErr := template.Execute(resultFile, entry); templatingErr != nil {
 				return templatingErr
 			}
 
 			if expandConfig.verbose {
-				log.Info("    ", resultFile.Name())
+				log.Info("     -", resultFile.Name())
 			}
 		}
 	}
@@ -160,15 +160,13 @@ func ExpandCmd(context *components.Context) error {
 }
 
 func ParseExpandConfig(context *components.Context) (*ExpandConfiguration, error) {
-	if len(context.Arguments) != 3 {
-		return nil, errors.New("Expected 3 argument, received " + strconv.Itoa(len(context.Arguments)))
+	if len(context.Arguments) != 2 {
+		return nil, errors.New("Expected 2 arguments, received " + strconv.Itoa(len(context.Arguments)))
 	}
 
 	var expandConfig = new(ExpandConfiguration)
-	expandConfig.configPath = context.Arguments[0]
-	expandConfig.templatesPath = context.Arguments[1]
-	expandConfig.outputPath = context.Arguments[2]
-	expandConfig.recursive = context.GetBoolFlagValue("recursive")
+	expandConfig.configFile = context.Arguments[0]
+	expandConfig.outputPath = context.Arguments[1]
 	expandConfig.verbose = context.GetBoolFlagValue("verbose")
 
 	return expandConfig, nil
