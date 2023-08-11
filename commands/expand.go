@@ -17,11 +17,9 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-// TODO: replace verbose with JFrog CLI's debug level output
 type ExpandConfiguration struct {
 	configFile string
 	outputPath string
-	verbose    bool
 }
 
 type Policy struct {
@@ -98,13 +96,7 @@ func GetExpandArguments() []components.Argument {
 }
 
 func GetExpandFlags() []components.Flag {
-	return []components.Flag{
-		components.BoolFlag{
-			Name:         "verbose",
-			Description:  "output verbose logging",
-			DefaultValue: false,
-		},
-	}
+	return []components.Flag{}
 }
 
 func GetExpandEnvVar() []components.EnvVar {
@@ -119,12 +111,9 @@ func ExpandCmd(context *components.Context) error {
 
 	InitTemplates()
 
-	if expandConfig.verbose {
-		log.Info("expandConfig:")
-		log.Info("    configFile:", expandConfig.configFile)
-		log.Info("    outputPath:", expandConfig.outputPath)
-		log.Info("    verbose:", expandConfig.verbose)
-	}
+	log.Debug("expandConfig:")
+	log.Debug("    configFile:", expandConfig.configFile)
+	log.Debug("    outputPath:", expandConfig.outputPath)
 
 	log.Info("Reading config file")
 	configFile, readErr := os.ReadFile(expandConfig.configFile)
@@ -142,18 +131,14 @@ func ExpandCmd(context *components.Context) error {
 	for policyName, policy := range config {
 		log.Info("  [", policyName, "]")
 
-		if expandConfig.verbose {
-			log.Info("    template:", policy.Template)
-			log.Info("    nameProperty:", policy.NameProperty)
-			log.Info("    deleteParent:", policy.DeleteParent)
-			log.Info("    entries:", len(policy.Entries))
-		}
+		log.Debug("    template:", policy.Template)
+		log.Debug("    nameProperty:", policy.NameProperty)
+		log.Debug("    deleteParent:", policy.DeleteParent)
+		log.Debug("    entries:", len(policy.Entries))
 
 		// Find the policy's template
 		templatePath := path.Join(filepath.Dir(expandConfig.configFile), policy.Template)
-		if expandConfig.verbose {
-			log.Info("    templatePath:", templatePath)
-		}
+		log.Debug("    templatePath:", templatePath)
 
 		// Read the policy's template
 		templateBytes, readErr := os.ReadFile(templatePath)
@@ -196,9 +181,7 @@ func ExpandCmd(context *components.Context) error {
 					return templatingErr
 				}
 
-				if expandConfig.verbose {
-					log.Info("     -", resultFile.Name())
-				}
+				log.Debug("    Expanded: ", resultFile.Name())
 			} else {
 				// For DeleteParent policies, we'll ultimately generate a FileSpec to match the parent paths of whatever matches the policy.
 				// To do this, we'll expand the template into a temp file, and use it to search for matches.
@@ -220,16 +203,12 @@ func ExpandCmd(context *components.Context) error {
 					return templatingErr
 				}
 
-				if expandConfig.verbose {
-					log.Info("    Searching for parent paths")
-				}
-
 				searchParams, parseErr := ParseSearchParamsFromPath(path.Join(tmpDir, fileName))
 				if parseErr != nil {
 					return parseErr
 				}
 
-				artifactoryManager, rtfErr := GetArtifactoryManager(context, true, expandConfig.verbose)
+				artifactoryManager, rtfErr := GetArtifactoryManager(context, true)
 				if rtfErr != nil {
 					return rtfErr
 				}
@@ -250,42 +229,43 @@ func ExpandCmd(context *components.Context) error {
 
 					pathMap := make(map[RepoPath]struct{}) // Map to avoid duplicates in the parent paths
 					for currentResult := new(utils.ResultItem); reader.NextRecord(currentResult) == nil; currentResult = new(utils.ResultItem) {
-						fmt.Printf("parent path: %s  -  %s  -  (%s)\n", currentResult.Path, currentResult.Repo, currentResult.Name)
 						repoPath := RepoPath{Repo: currentResult.Repo, Path: currentResult.Path}
 						pathMap[repoPath] = struct{}{}
 					}
 					repoPaths = maps.Keys(pathMap)
+
+					log.Debug("    Parent paths for [", policyName, "] :")
+					for _, repoPath := range repoPaths {
+						log.Debug("      -", repoPath.Repo, "-", repoPath.Path)
+					}
 
 					if readErr := reader.GetError(); readErr != nil {
 						return readErr
 					}
 				}
 
-				if len(repoPaths) > 0 {
-					// Create the result file
-					resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, policyName, fileName))
-					if fileErr != nil {
-						return fileErr
-					}
-
-					// Expand the template, dumping it into the result file
-					data := struct {
-						RepoPaths []RepoPath
-					}{
-						RepoPaths: repoPaths,
-					}
-					if templatingErr := deleteParentTemplate.Execute(resultFile, data); templatingErr != nil {
-						return templatingErr
-					}
-
-					if expandConfig.verbose {
-						log.Info("     -", resultFile.Name())
-					}
-				} else {
-					// Bail if no matches were found
-					log.Info("No parent paths found, skipping generating") //DEBUG?
+				if len(repoPaths) <= 0 {
+					log.Debug("No parent paths found, skipping generating")
 					continue
 				}
+
+				// Create the result file
+				resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, policyName, fileName))
+				if fileErr != nil {
+					return fileErr
+				}
+
+				// Expand the template, dumping it into the result file
+				data := struct {
+					RepoPaths []RepoPath
+				}{
+					RepoPaths: repoPaths,
+				}
+				if templatingErr := deleteParentTemplate.Execute(resultFile, data); templatingErr != nil {
+					return templatingErr
+				}
+
+				log.Debug("    Expanded: ", resultFile.Name())
 			}
 		}
 	}
@@ -302,7 +282,6 @@ func ParseExpandConfig(context *components.Context) (*ExpandConfiguration, error
 	var expandConfig = new(ExpandConfiguration)
 	expandConfig.configFile = context.Arguments[0]
 	expandConfig.outputPath = context.Arguments[1]
-	expandConfig.verbose = context.GetBoolFlagValue("verbose")
 
 	return expandConfig, nil
 }

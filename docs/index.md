@@ -35,7 +35,6 @@ To enforce them, set up a humble cron job running the plugin.
 
   - Options:
     - --dry-run    _do not delete artifacts [Default: **true**]_
-    - --verbose    _output verbose logging [Default: false]_
     - --recursive    _recursively find FileSpecs files in the given dir [Default: false]_
 
 #### expand
@@ -46,8 +45,10 @@ To enforce them, set up a humble cron job running the plugin.
     - config-path    _(Path to the JSON config file)_
     - output-path    _(Path to output the generated FileSpecs)_
 
-  - Options:
-    - --verbose      _output verbose logging [Default: false]_
+
+### running with verbose output
+
+For verbose output to aid in debugging, set `JFROG_CLI_LOG_LEVEL=DEBUG`.
 
 ## Templating
 
