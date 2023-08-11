@@ -9,7 +9,6 @@ It also has templating capabilities to help maintain similar retention policies.
 
 To set up your retention policies, define them as [FileSpecs](https://www.jfrog.com/confluence/display/JFROG/Using+File+Specs) (or templates thereof).
 To enforce them, set up a humble cron job running the plugin.
-That's all there is to it.
 
 ## Installing rt-retention
 
@@ -45,39 +44,36 @@ That's all there is to it.
   
   - Arguments:
     - config-path    _(Path to the JSON config file)_
-    - templates-path    _(Path to the templates dir)_
     - output-path    _(Path to output the generated FileSpecs)_
 
   - Options:
     - --verbose      _output verbose logging [Default: false]_
-    - --recursive    _recursively find templates in the given dir [Default: false]_
 
 ## Templating
 
 The [`expand`](#expand) command can generate FileSpecs from Go templates, populated with values from a JSON config file.
 
-The JSON config file contains a key for each template with an array of entries.
-The keys should match the template file names (without the `.json` extension). 
+The JSON config file may contain one or more policy definitions.
+Each specifies the template file it uses, as well as a list of entries.
+The template file path should be relative to the config file.
 Each entry will result in a FileSpecs file being generated.
 
 _Example `config.json`:_
 ```json
 {
-  "delete-everything": [
-    {
-      "Repo": "generic-tmp-local"
-    }
-  ],
-  "delete-older-than": [
-    {
-      "Repo": "generic-dev-local",
-      "Time": "14d"
+    "my-junk-repositories": {
+        "template": "templates/entire-repo.json",
+        "entries": [
+            { "Repo": "scratch-local" }
+        ]
     },
-    {
-      "Repo": "generic-rc-local",
-      "Time": "1y"
+    "my-dev-repositories": {
+        "template": "templates/older-than.json",
+        "entries": [
+            { "Repo": "generic-dev-local", "Time": "3w" },
+            { "Repo": "libs-snapshot-local", "Time": "1y" }
+        ]
     }
-  ]
 }
 ```
 
@@ -106,10 +102,59 @@ Pass the config file, the templates directory and the output directory to the [`
 
 ```bash
 $ jf rt-retention expand config.json templates/ policies/
-[🔵Info] Collecting template files
-[🔵Info] Found 2 JSON files
-[🔵Info] Parsing config file
-[🔵Info] Expanding delete-everything
-[🔵Info] Expanding delete-older-than
+[🔵Info] Reading config file
+[🔵Info] Parsing config JSON
+[🔵Info] Expanding policies
+[🔵Info]   [ my-junk-repositories ]
+[🔵Info]   [ my-dev-repositories ]
 [🔵Info] Done
+```
+
+### Extra templating properties
+
+#### deleteParent
+
+Policies can set `deleteParent` to delete the _parent paths_ of what the FileSpecs would match, rather than the matches themselves.
+
+This is useful for deleting entire directories if they contain an artifact matching certain conditions, or deleting Docker images based on conditions on their manifest file.
+
+```json
+{
+    "template-one": {
+        "template": "templates/template.json",
+        "deleteParent": true,
+        "entries": [
+            { "Repo": "scratch-local" }
+        ]
+    }
+}
+```
+
+#### nameProperty
+
+Policies can optionally set a `nameProperty`, which can be used to change the generated FileSpecs' filename to the value of the given property key.
+Without it, FileSpecs are generated using the name of the template, and the index of their entry.
+
+The below example uses the `Repo` property value to use as the FileSpecs' filename.
+
+```json
+{
+    "template-one": {
+        "template": "templates/template.json",
+        "nameProperty": "Repo",
+        "entries": [
+            { "Repo": "scratch-local" },
+            { "Repo": "dev-local" }
+        ]
+    }
+}
+```
+
+Expanding the templates will result in the following generated files:
+
+```
+output/
+ `- template-one/
+     |- scratch-local-0.json
+     `- dev-local-0.json
 ```
