@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -11,9 +12,12 @@ import (
 	"text/template"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+	"github.com/jfrog/jfrog-client-go/artifactory/services/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"golang.org/x/exp/maps"
 )
 
+// TODO: replace verbose with JFrog CLI's debug level output
 type ExpandConfiguration struct {
 	configFile string
 	outputPath string
@@ -25,6 +29,45 @@ type Policy struct {
 	DeleteParent bool                     `json:"deleteParent"`
 	NameProperty string                   `json:"nameProperty"`
 	Entries      []map[string]interface{} `json:"entries"`
+}
+
+type RepoPath struct {
+	Repo string
+	Path string
+}
+
+const deleteParentTemplateText = `
+{
+	"files": [
+		{
+			"aql": {
+				"items.find": {
+					"$or": [
+{{ formatRepoPaths .RepoPaths }}
+					]
+				}
+			}
+		}
+	]
+}
+`
+
+var deleteParentTemplate *template.Template
+
+func InitTemplates() {
+	log.Info("Initializing built-in templates") //Debug?
+	deleteParentTemplate = template.Must(template.New("deleteParent").Funcs(template.FuncMap{
+		"formatRepoPaths": func(repoPaths []RepoPath) string {
+			result := ""
+			for i, repoPath := range repoPaths {
+				result += fmt.Sprintf(`						{ "repo": "%s", "path": "%s" }`, repoPath.Repo, repoPath.Path)
+				if i < len(repoPaths)-1 {
+					result += ",\n"
+				}
+			}
+			return result
+		},
+	}).Parse(deleteParentTemplateText))
 }
 
 func GetExpandCommand() components.Command {
@@ -74,6 +117,8 @@ func ExpandCmd(context *components.Context) error {
 		return argErr
 	}
 
+	InitTemplates()
+
 	if expandConfig.verbose {
 		log.Info("expandConfig:")
 		log.Info("    configFile:", expandConfig.configFile)
@@ -100,13 +145,14 @@ func ExpandCmd(context *components.Context) error {
 		if expandConfig.verbose {
 			log.Info("    template:", policy.Template)
 			log.Info("    nameProperty:", policy.NameProperty)
+			log.Info("    deleteParent:", policy.DeleteParent)
 			log.Info("    entries:", len(policy.Entries))
 		}
 
 		// Find the policy's template
 		templatePath := path.Join(filepath.Dir(expandConfig.configFile), policy.Template)
 		if expandConfig.verbose {
-			log.Info("    template:", templatePath)
+			log.Info("    templatePath:", templatePath)
 		}
 
 		// Read the policy's template
@@ -138,19 +184,108 @@ func ExpandCmd(context *components.Context) error {
 				}
 			}
 
-			// Create the result file
-			resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, policyName, fileName))
-			if fileErr != nil {
-				return fileErr
-			}
+			if !policy.DeleteParent {
+				// Create the result file
+				resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, policyName, fileName))
+				if fileErr != nil {
+					return fileErr
+				}
 
-			// Expand the template, dumping it into the result file
-			if templatingErr := template.Execute(resultFile, entry); templatingErr != nil {
-				return templatingErr
-			}
+				// Expand the template, dumping it into the result file
+				if templatingErr := template.Execute(resultFile, entry); templatingErr != nil {
+					return templatingErr
+				}
 
-			if expandConfig.verbose {
-				log.Info("     -", resultFile.Name())
+				if expandConfig.verbose {
+					log.Info("     -", resultFile.Name())
+				}
+			} else {
+				// For DeleteParent policies, we'll ultimately generate a FileSpec to match the parent paths of whatever matches the policy.
+				// To do this, we'll expand the template into a temp file, and use it to search for matches.
+				// Then, we generate the final FileSpec that matches the parent paths of whatever we found.
+
+				// Create a temp dir to store the search FileSpec
+				tmpDir, tmpErr := ioutil.TempDir(expandConfig.outputPath, "rt-retention-*")
+				if tmpErr != nil {
+					return tmpErr
+				}
+				defer os.RemoveAll(tmpDir)
+
+				// Create and expand the template into a temp file
+				tempFile, fileErr := os.Create(path.Join(tmpDir, fileName))
+				if fileErr != nil {
+					return fileErr
+				}
+				if templatingErr := template.Execute(tempFile, entry); templatingErr != nil {
+					return templatingErr
+				}
+
+				if expandConfig.verbose {
+					log.Info("    Searching for parent paths")
+				}
+
+				searchParams, parseErr := ParseSearchParamsFromPath(path.Join(tmpDir, fileName))
+				if parseErr != nil {
+					return parseErr
+				}
+
+				artifactoryManager, rtfErr := GetArtifactoryManager(context, true, expandConfig.verbose)
+				if rtfErr != nil {
+					return rtfErr
+				}
+
+				// Search for and collect matches' parent paths
+				var repoPaths []RepoPath
+				for _, sp := range searchParams {
+					reader, searchErr := artifactoryManager.SearchFiles(sp)
+					if searchErr != nil {
+						return searchErr
+					}
+
+					defer func() {
+						if reader != nil {
+							reader.Close()
+						}
+					}()
+
+					pathMap := make(map[RepoPath]struct{}) // Map to avoid duplicates in the parent paths
+					for currentResult := new(utils.ResultItem); reader.NextRecord(currentResult) == nil; currentResult = new(utils.ResultItem) {
+						fmt.Printf("parent path: %s  -  %s  -  (%s)\n", currentResult.Path, currentResult.Repo, currentResult.Name)
+						repoPath := RepoPath{Repo: currentResult.Repo, Path: currentResult.Path}
+						pathMap[repoPath] = struct{}{}
+					}
+					repoPaths = maps.Keys(pathMap)
+
+					if readErr := reader.GetError(); readErr != nil {
+						return readErr
+					}
+				}
+
+				if len(repoPaths) > 0 {
+					// Create the result file
+					resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, policyName, fileName))
+					if fileErr != nil {
+						return fileErr
+					}
+
+					// Expand the template, dumping it into the result file
+					data := struct {
+						RepoPaths []RepoPath
+					}{
+						RepoPaths: repoPaths,
+					}
+					if templatingErr := deleteParentTemplate.Execute(resultFile, data); templatingErr != nil {
+						return templatingErr
+					}
+
+					if expandConfig.verbose {
+						log.Info("     -", resultFile.Name())
+					}
+				} else {
+					// Bail if no matches were found
+					log.Info("No parent paths found, skipping generating") //DEBUG?
+					continue
+				}
 			}
 		}
 	}

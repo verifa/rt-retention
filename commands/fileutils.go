@@ -9,6 +9,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-client-go/artifactory/services"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 func FindFiles(root string, suffix string, recursive bool) ([]string, error) {
@@ -77,4 +78,38 @@ func ParseDeleteParamsFromFile(file *os.File) ([]services.DeleteParams, error) {
 	}
 
 	return deleteParams, nil
+}
+
+func ParseSearchParamsFromPath(path string) ([]services.SearchParams, error) {
+	file, fileErr := os.Open(path)
+	if fileErr != nil {
+		return nil, fileErr
+	}
+
+	return ParseSearchParamsFromFile(file)
+}
+
+func ParseSearchParamsFromFile(file *os.File) ([]services.SearchParams, error) {
+	var specFiles spec.SpecFiles
+	decodeErr := json.NewDecoder(file).Decode(&specFiles)
+	if decodeErr != nil {
+		log.Info("decode")
+		return nil, decodeErr
+	}
+
+	searchParams := []services.SearchParams{}
+	for _, file := range specFiles.Files {
+		var (
+			sp      services.SearchParams
+			castErr error
+		)
+		sp.CommonParams, castErr = file.ToCommonParams()
+		if castErr != nil {
+			return nil, castErr
+		}
+
+		searchParams = append(searchParams, sp)
+	}
+
+	return searchParams, nil
 }

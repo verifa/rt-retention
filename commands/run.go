@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
+// TODO: replace verbose with JFrog CLI's debug level output
 type RunConfiguration struct {
 	fileSpecsPath string
 	dryRun        bool
