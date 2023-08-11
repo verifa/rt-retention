@@ -9,12 +9,10 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-// TODO: replace verbose with JFrog CLI's debug level output
 type RunConfiguration struct {
 	fileSpecsPath string
 	dryRun        bool
 	recursive     bool
-	verbose       bool
 }
 
 func GetRunCommand() components.Command {
@@ -48,11 +46,6 @@ func GetRunFlags() []components.Flag {
 			DefaultValue: true,
 		},
 		components.BoolFlag{
-			Name:         "verbose",
-			Description:  "output verbose logging",
-			DefaultValue: false,
-		},
-		components.BoolFlag{
 			Name:         "recursive",
 			Description:  "recursively find filespecs files in the given dir",
 			DefaultValue: false,
@@ -70,16 +63,13 @@ func RunCmd(context *components.Context) error {
 		return argErr
 	}
 
-	if runConfig.verbose {
-		log.Info("runConfig:")
-		log.Info("    fileSpecsPath:", runConfig.fileSpecsPath)
-		log.Info("    dryRun:", runConfig.dryRun)
-		log.Info("    recursive:", runConfig.recursive)
-		log.Info("    verbose:", runConfig.verbose)
-	}
+	log.Debug("runConfig:")
+	log.Debug("    fileSpecsPath:", runConfig.fileSpecsPath)
+	log.Debug("    dryRun:", runConfig.dryRun)
+	log.Debug("    recursive:", runConfig.recursive)
 
 	log.Info("Configuring Artifactory manager")
-	artifactoryManager, rtfErr := GetArtifactoryManager(context, runConfig.dryRun, runConfig.verbose)
+	artifactoryManager, rtfErr := GetArtifactoryManager(context, runConfig.dryRun)
 	if rtfErr != nil {
 		return rtfErr
 	}
@@ -96,10 +86,8 @@ func RunCmd(context *components.Context) error {
 		log.Info("Found", len(fileSpecsPaths), "JSON files")
 	}
 
-	if runConfig.verbose {
-		for _, file := range fileSpecsPaths {
-			log.Info("    " + file)
-		}
+	for _, file := range fileSpecsPaths {
+		log.Debug("    " + file)
 	}
 
 	if retentionErr := RunArtifactRetention(artifactoryManager, fileSpecsPaths); retentionErr != nil {
@@ -119,7 +107,6 @@ func ParseRunConfig(context *components.Context) (*RunConfiguration, error) {
 	runConfig.fileSpecsPath = context.Arguments[0]
 	runConfig.dryRun = context.GetBoolFlagValue("dry-run")
 	runConfig.recursive = context.GetBoolFlagValue("recursive")
-	runConfig.verbose = context.GetBoolFlagValue("verbose")
 
 	return runConfig, nil
 }

@@ -12,15 +12,13 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-func GetArtifactoryDetails(context *components.Context, verbose bool) (*config.ServerDetails, error) {
+func GetArtifactoryDetails(context *components.Context) (*config.ServerDetails, error) {
 	log.Info("Fetching Artifactory details")
 
-	if verbose {
-		var servers = commands.GetAllServerIds()
-		log.Info("Server IDs: ", len(servers))
-		for _, server := range servers {
-			log.Info("\t", server)
-		}
+	var servers = commands.GetAllServerIds()
+	log.Debug("Server IDs: ", len(servers))
+	for _, server := range servers {
+		log.Debug("\t", server)
 	}
 
 	details, cfgErr := config.GetDefaultServerConf()
@@ -28,10 +26,8 @@ func GetArtifactoryDetails(context *components.Context, verbose bool) (*config.S
 		return nil, cfgErr
 	}
 
-	if verbose {
-		log.Info("Default server ID:")
-		log.Info("\t", details.ServerId, "(", details.ArtifactoryUrl, ")")
-	}
+	log.Debug("Default server ID:")
+	log.Debug("\t", details.ServerId, "(", details.ArtifactoryUrl, ")")
 
 	if details.ArtifactoryUrl == "" {
 		return nil, errors.New("no server-id was found, or the server-id has no url")
@@ -45,8 +41,8 @@ func GetArtifactoryDetails(context *components.Context, verbose bool) (*config.S
 	return details, nil
 }
 
-func GetArtifactoryManager(context *components.Context, dryRun bool, verbose bool) (artifactory.ArtifactoryServicesManager, error) {
-	artifactoryDetails, cfgErr := GetArtifactoryDetails(context, verbose)
+func GetArtifactoryManager(context *components.Context, dryRun bool) (artifactory.ArtifactoryServicesManager, error) {
+	artifactoryDetails, cfgErr := GetArtifactoryDetails(context)
 	if cfgErr != nil {
 		return nil, cfgErr
 	}
