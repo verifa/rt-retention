@@ -40,7 +40,7 @@ To enforce them, set up a humble cron job running the plugin.
 #### expand
 
   - Usage: `jf rt-retention expand [command options] <config-path> <templates-path> <output-path>`
-  
+
   - Arguments:
     - config-path    _(Path to the JSON config file)_
     - output-path    _(Path to output the generated FileSpecs)_
