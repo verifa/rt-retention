@@ -3,6 +3,7 @@
 echo "[RT-RETENTION] Cleaning..."
 rm -rf build/
 echo "[RT-RETENTION] Building..."
+go mod download
 go build -o build/rt-retention
 echo "[RT-RETENTION] Testing..."
 build/rt-retention --help
