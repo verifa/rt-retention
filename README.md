@@ -28,23 +28,22 @@ To enforce them, set up a humble cron job running the plugin.
 
 #### run
 
-  - Usage: `jf rt-retention run [command options] <filespecs-path>`
+- Usage: `jf rt-retention run [command options] <filespecs-path>`
 
-  - Arguments:
-      - filespecs-path    _(Path to the FileSpecs file/dir)_
+- Arguments:
+  - filespecs-path    _(Path to the FileSpecs file/dir)_
 
-  - Options:
-    - --dry-run    _do not delete artifacts [Default: **true**]_
-    - --recursive    _recursively find FileSpecs files in the given dir [Default: false]_
+- Options:
+  - --dry-run    _do not delete artifacts [Default: **true**]_
+  - --recursive    _recursively find FileSpecs files in the given dir [Default: false]_
 
 #### expand
 
-  - Usage: `jf rt-retention expand [command options] <config-path> <templates-path> <output-path>`
+- Usage: `jf rt-retention expand [command options] <config-path> <templates-path> <output-path>`
 
-  - Arguments:
-    - config-path    _(Path to the JSON config file)_
-    - output-path    _(Path to output the generated FileSpecs)_
-
+- Arguments:
+  - config-path    _(Path to the JSON config file)_
+  - output-path    _(Path to output the generated FileSpecs)_
 
 ### running with verbose output
 
@@ -60,6 +59,7 @@ The template file path should be relative to the config file.
 Each entry will result in a FileSpecs file being generated.
 
 _Example `config.json`:_
+
 ```json
 {
     "my-junk-repositories": {
@@ -82,6 +82,7 @@ The templates themselves are [Go text templates](https://pkg.go.dev/text/templat
 Properties from the JSON config entry will be used to populate the template.
 
 _Example `templates/delete-older-than.json`:_
+
 ```json
 {
   "files": [
@@ -153,7 +154,7 @@ The below example uses the `Repo` property value to use as the FileSpecs' filena
 
 Expanding the templates will result in the following generated files:
 
-```
+```text
 output/
  `- template-one/
      |- scratch-local-0.json
