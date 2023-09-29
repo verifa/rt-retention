@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -188,7 +187,7 @@ func ExpandCmd(context *components.Context) error {
 				// Then, we generate the final FileSpec that matches the parent paths of whatever we found.
 
 				// Create a temp dir to store the search FileSpec
-				tmpDir, tmpErr := ioutil.TempDir(expandConfig.outputPath, "rt-retention-*")
+				tmpDir, tmpErr := os.MkdirTemp(expandConfig.outputPath, "rt-retention-*")
 				if tmpErr != nil {
 					return tmpErr
 				}
