@@ -13,7 +13,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"golang.org/x/exp/maps"
 )
 
 type ExpandConfiguration struct {
@@ -28,19 +27,15 @@ type Policy struct {
 	Entries      []map[string]interface{} `json:"entries"`
 }
 
-type RepoPath struct {
-	Repo string
-	Path string
-}
-
 const deleteParentTemplateText = `
 {
 	"files": [
 		{
 			"aql": {
 				"items.find": {
+					"repo": "{{ .Repo }}",
 					"$or": [
-{{ formatRepoPaths .RepoPaths }}
+{{ formatPaths .Paths }}
 					]
 				}
 			}
@@ -52,13 +47,13 @@ const deleteParentTemplateText = `
 var deleteParentTemplate *template.Template
 
 func InitTemplates() {
-	log.Info("Initializing built-in templates") //Debug?
+	log.Info("Initializing built-in templates")
 	deleteParentTemplate = template.Must(template.New("deleteParent").Funcs(template.FuncMap{
-		"formatRepoPaths": func(repoPaths []RepoPath) string {
+		"formatPaths": func(paths []string) string {
 			result := ""
-			for i, repoPath := range repoPaths {
-				result += fmt.Sprintf(`						{ "repo": "%s", "path": "%s" }`, repoPath.Repo, repoPath.Path)
-				if i < len(repoPaths)-1 {
+			for i, path := range paths {
+				result += fmt.Sprintf(`						{ "path": "%s" }`, path)
+				if i < len(paths)-1 {
 					result += ",\n"
 				}
 			}
@@ -152,25 +147,22 @@ func ExpandCmd(context *components.Context) error {
 		}
 
 		// Create output dir if necessary
-		if dirErr := os.MkdirAll(path.Join(expandConfig.outputPath, policyName), 0755); dirErr != nil {
+		policyPath := path.Join(expandConfig.outputPath, policyName)
+		if dirErr := os.MkdirAll(policyPath, 0755); dirErr != nil {
 			return dirErr
 		}
 
 		// Iterate over policy entries
 		for index, entry := range policy.Entries {
-			// Figure out the file name for the result file
-			fileName := fmt.Sprint(policyName, "-", index, ".json")
-
-			// If the policy has a NameProperty, use that for the filename
-			if policy.NameProperty != "" {
-				if entry[policy.NameProperty] != "" {
-					fileName = fmt.Sprint(entry[policy.NameProperty], "-", index, ".json")
-				}
-			}
-
 			if !policy.DeleteParent {
+				// Figure out the file name for the result file
+				fileName := fmt.Sprintf("%s-%d.json", policyName, index)
+				if policy.NameProperty != "" && entry[policy.NameProperty] != "" {
+					fileName = fmt.Sprintf("%s-%d.json", entry[policy.NameProperty], index)
+				}
+
 				// Create the result file
-				resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, policyName, fileName))
+				resultFile, fileErr := os.Create(path.Join(policyPath, fileName))
 				if fileErr != nil {
 					return fileErr
 				}
@@ -194,7 +186,7 @@ func ExpandCmd(context *components.Context) error {
 				defer os.RemoveAll(tmpDir)
 
 				// Create and expand the template into a temp file
-				tempFile, fileErr := os.Create(path.Join(tmpDir, fileName))
+				tempFile, fileErr := os.Create(path.Join(tmpDir, policyName))
 				if fileErr != nil {
 					return fileErr
 				}
@@ -202,7 +194,7 @@ func ExpandCmd(context *components.Context) error {
 					return templatingErr
 				}
 
-				searchParams, parseErr := ParseSearchParamsFromPath(path.Join(tmpDir, fileName))
+				searchParams, parseErr := ParseSearchParamsFromPath(path.Join(tmpDir, policyName))
 				if parseErr != nil {
 					return parseErr
 				}
@@ -213,7 +205,7 @@ func ExpandCmd(context *components.Context) error {
 				}
 
 				// Search for and collect matches' parent paths
-				var repoPaths []RepoPath
+				repoPaths := make(map[string][]string)
 				for _, sp := range searchParams {
 					reader, searchErr := artifactoryManager.SearchFiles(sp)
 					if searchErr != nil {
@@ -226,16 +218,19 @@ func ExpandCmd(context *components.Context) error {
 						}
 					}()
 
-					pathMap := make(map[RepoPath]struct{}) // Map to avoid duplicates in the parent paths
-					for currentResult := new(utils.ResultItem); reader.NextRecord(currentResult) == nil; currentResult = new(utils.ResultItem) {
-						repoPath := RepoPath{Repo: currentResult.Repo, Path: currentResult.Path}
-						pathMap[repoPath] = struct{}{}
+					for result := new(utils.ResultItem); reader.NextRecord(result) == nil; result = new(utils.ResultItem) {
+						if _, exists := repoPaths[result.Repo]; !exists {
+							repoPaths[result.Repo] = []string{}
+						}
+						repoPaths[result.Repo] = append(repoPaths[result.Repo], result.Path)
 					}
-					repoPaths = maps.Keys(pathMap)
 
 					log.Debug("    Parent paths for [", policyName, "] :")
-					for _, repoPath := range repoPaths {
-						log.Debug("      -", repoPath.Repo, "-", repoPath.Path)
+					for repo, paths := range repoPaths {
+						log.Debug("      -", repo)
+						for _, path := range paths {
+							log.Debug("          -", path)
+						}
 					}
 
 					if readErr := reader.GetError(); readErr != nil {
@@ -243,28 +238,47 @@ func ExpandCmd(context *components.Context) error {
 					}
 				}
 
-				if len(repoPaths) <= 0 {
-					log.Debug("No parent paths found, skipping generating")
-					continue
-				}
+				// Write File Specs for each matched repository
+				for repo, paths := range repoPaths {
+					log.Debug("Generating for", repo)
+					if len(paths) <= 0 {
+						log.Debug("No parent paths found, skipping generating")
+						continue
+					}
 
-				// Create the result file
-				resultFile, fileErr := os.Create(path.Join(expandConfig.outputPath, policyName, fileName))
-				if fileErr != nil {
-					return fileErr
-				}
+					// Figure out the file name for the result file
+					fileName := fmt.Sprintf("%s-%d.json", policyName, index)
+					if policy.NameProperty != "" && entry[policy.NameProperty] != "" {
+						fileName = fmt.Sprintf("%s-%d.json", entry[policy.NameProperty], index)
+					}
 
-				// Expand the template, dumping it into the result file
-				data := struct {
-					RepoPaths []RepoPath
-				}{
-					RepoPaths: repoPaths,
-				}
-				if templatingErr := deleteParentTemplate.Execute(resultFile, data); templatingErr != nil {
-					return templatingErr
-				}
+					// Create output dir if necessary
+					log.Debug("DEBUG", path.Join(policyPath, repo))
+					if dirErr := os.MkdirAll(path.Join(policyPath, repo), 0755); dirErr != nil {
+						return dirErr
+					}
 
-				log.Debug("    Expanded: ", resultFile.Name())
+					// Create the result file
+					resultFile, fileErr := os.Create(path.Join(policyPath, repo, fileName))
+					if fileErr != nil {
+						return fileErr
+					}
+
+					// Expand the template, dumping it into the result file
+					data := struct {
+						Repo  string
+						Paths []string
+					}{
+						Repo:  repo,
+						Paths: paths,
+					}
+					if templatingErr := deleteParentTemplate.Execute(resultFile, data); templatingErr != nil {
+						return templatingErr
+					}
+
+					log.Debug("    Expanded: ", resultFile.Name())
+
+				}
 			}
 		}
 	}
