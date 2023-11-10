@@ -13,6 +13,7 @@ type RunConfiguration struct {
 	fileSpecsPath string
 	dryRun        bool
 	recursive     bool
+	threads       int
 }
 
 func GetRunCommand() components.Command {
@@ -50,6 +51,12 @@ func GetRunFlags() []components.Flag {
 			Description:  "recursively find filespecs files in the given dir",
 			DefaultValue: false,
 		},
+		components.StringFlag{
+			Name:         "threads",
+			Description:  "Number of worker threads",
+			DefaultValue: "3",
+			Mandatory:    false,
+		},
 	}
 }
 
@@ -69,7 +76,7 @@ func RunCmd(context *components.Context) error {
 	log.Debug("    recursive:", runConfig.recursive)
 
 	log.Info("Configuring Artifactory manager")
-	artifactoryManager, rtfErr := GetArtifactoryManager(context, runConfig.dryRun)
+	artifactoryManager, rtfErr := GetArtifactoryManager(context, runConfig.dryRun, runConfig.threads)
 	if rtfErr != nil {
 		return rtfErr
 	}
@@ -107,6 +114,11 @@ func ParseRunConfig(context *components.Context) (*RunConfiguration, error) {
 	runConfig.fileSpecsPath = context.Arguments[0]
 	runConfig.dryRun = context.GetBoolFlagValue("dry-run")
 	runConfig.recursive = context.GetBoolFlagValue("recursive")
+	threads, err := strconv.Atoi(context.GetStringFlagValue("threads"))
+	if err != nil {
+		return nil, err
+	}
+	runConfig.threads = threads
 
 	return runConfig, nil
 }

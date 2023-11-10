@@ -41,14 +41,14 @@ func GetArtifactoryDetails(context *components.Context) (*config.ServerDetails, 
 	return details, nil
 }
 
-func GetArtifactoryManager(context *components.Context, dryRun bool) (artifactory.ArtifactoryServicesManager, error) {
+func GetArtifactoryManager(context *components.Context, dryRun bool, threads int) (artifactory.ArtifactoryServicesManager, error) {
 	artifactoryDetails, cfgErr := GetArtifactoryDetails(context)
 	if cfgErr != nil {
 		return nil, cfgErr
 	}
 
 	log.Info("Configuring Artifactory manager")
-	artifactoryManager, rtfErr := core_utils.CreateServiceManager(artifactoryDetails, 3, 5000, dryRun)
+	artifactoryManager, rtfErr := core_utils.CreateServiceManagerWithThreads(artifactoryDetails, dryRun, threads, 3, 5000)
 	if rtfErr != nil {
 		return nil, rtfErr
 	}

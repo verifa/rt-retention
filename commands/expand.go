@@ -18,6 +18,7 @@ import (
 type ExpandConfiguration struct {
 	configFile string
 	outputPath string
+	threads    int
 }
 
 type Policy struct {
@@ -90,7 +91,14 @@ func GetExpandArguments() []components.Argument {
 }
 
 func GetExpandFlags() []components.Flag {
-	return []components.Flag{}
+	return []components.Flag{
+		components.StringFlag{
+			Name:         "threads",
+			Description:  "Number of worker threads",
+			DefaultValue: "3",
+			Mandatory:    false,
+		},
+	}
 }
 
 func GetExpandEnvVar() []components.EnvVar {
@@ -199,7 +207,7 @@ func ExpandCmd(context *components.Context) error {
 					return parseErr
 				}
 
-				artifactoryManager, rtfErr := GetArtifactoryManager(context, true)
+				artifactoryManager, rtfErr := GetArtifactoryManager(context, true, expandConfig.threads)
 				if rtfErr != nil {
 					return rtfErr
 				}
@@ -295,6 +303,11 @@ func ParseExpandConfig(context *components.Context) (*ExpandConfiguration, error
 	var expandConfig = new(ExpandConfiguration)
 	expandConfig.configFile = context.Arguments[0]
 	expandConfig.outputPath = context.Arguments[1]
+	threads, err := strconv.Atoi(context.GetStringFlagValue("threads"))
+	if err != nil {
+		return nil, err
+	}
+	expandConfig.threads = threads
 
 	return expandConfig, nil
 }

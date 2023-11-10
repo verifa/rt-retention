@@ -35,7 +35,8 @@ To enforce them, set up a humble cron job running the plugin.
 
 - Options:
   - --dry-run    _do not delete artifacts [Default: **true**]_
-  - --recursive    _recursively find FileSpecs files in the given dir [Default: false]_
+  - --recursive  _recursively find FileSpecs files in the given dir [Default: false]_
+  - --threads    _amount of worker threads [Default: 3]_
 
 #### expand
 
@@ -44,6 +45,9 @@ To enforce them, set up a humble cron job running the plugin.
 - Arguments:
   - config-path    _(Path to the JSON config file)_
   - output-path    _(Path to output the generated FileSpecs)_
+
+- Options:
+  - --threads    _amount of worker threads [Default: 3]_
 
 ### running with verbose output
 
