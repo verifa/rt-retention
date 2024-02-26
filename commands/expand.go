@@ -93,8 +93,10 @@ func GetExpandArguments() []components.Argument {
 func GetExpandFlags() []components.Flag {
 	return []components.Flag{
 		components.StringFlag{
-			Name:         "threads",
-			Description:  "Number of worker threads",
+			BaseFlag: components.BaseFlag{
+				Name:        "threads",
+				Description: "Number of worker threads",
+			},
 			DefaultValue: "3",
 			Mandatory:    false,
 		},

@@ -42,18 +42,24 @@ func GetRunArguments() []components.Argument {
 func GetRunFlags() []components.Flag {
 	return []components.Flag{
 		components.BoolFlag{
-			Name:         "dry-run",
-			Description:  "do not delete artifacts",
+			BaseFlag: components.BaseFlag{
+				Name:        "dry-run",
+				Description: "do not delete artifacts",
+			},
 			DefaultValue: true,
 		},
 		components.BoolFlag{
-			Name:         "recursive",
-			Description:  "recursively find filespecs files in the given dir",
+			BaseFlag: components.BaseFlag{
+				Name:        "recursive",
+				Description: "recursively find filespecs files in the given dir",
+			},
 			DefaultValue: false,
 		},
 		components.StringFlag{
-			Name:         "threads",
-			Description:  "Number of worker threads",
+			BaseFlag: components.BaseFlag{
+				Name:        "threads",
+				Description: "Number of worker threads",
+			},
 			DefaultValue: "3",
 			Mandatory:    false,
 		},
